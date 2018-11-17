@@ -64,16 +64,14 @@
 %\crdata{0-12345-67-8/90/01}  % Allows default copyright data (0-89791-88-6/97/05) to be over-ridden - IF NEED BE.
 % --- End of Author Metadata ---
 
-\title{Bitshield \titlenote{(Produces the permission block, and
-copyright information). For use with
-SIG-ALTERNATE.CLS. Supported by ACM.}}
+\title{Adaptive Information Dissemination in the Bitcoin Network}
 
-\subtitle{Adaptive information dissemination in the Bitcoin network
+%\subtitle{Adaptive information dissemination in the Bitcoin network
 %\titlenote{A full version of this paper is available as
 %\textit{Author's Guide to Preparing ACM SIG Proceedings Using
 %\LaTeX$2_\epsilon$\ and BibTeX} at
 %\texttt{www.acm.org/eaddress.htm}}
-}
+
 %
 % You need the command \numberofauthors to handle the 'placement
 % and alignment' of the authors beneath the title.
@@ -198,7 +196,7 @@ From the brief description above, it easy to realise that the task of broadcasti
 
 In this paper, we propose a number of techniques to improve the efficiency of the transaction broadcast protocol of \textit{Bitcoin}. Our algorithms take advantage of already existing asymmetries in the network. In fact, in the \textit{Bitcoin} network, only a fraction of the network (currently around $10\%$) spends resources generating new blocks (these nodes are called miners);  the majority of nodes just relay information and maintain a copy of the blockchain. Based on this observation, our strategy consists of skewing the dissemination algorithm such that transactions reach miners faster, which will also result in lower amounts of duplicated advertisements. The propagation of transaction to nodes that are not miners may, in result, exhibit higher latency, but this is not an issue for the execution of the Bitcoin protocol as the time window to generate a new block is roughly 10 minutes. Also, our algorithms leverage on the most recent mechanisms that have been added to the standard \textit{Bitcoin} protocol, namely on new control messages that improve the dissemination of transactions once they are added to a block. Our algorithms are adaptive and adjust the dissemination bias as miners leave or new miners join the network. An experimental evaluation of the changes proposed shows a reduction in $10.2\%$ of the bandwidth consumed and a reduction of $41.5\%$ in the total number of messages exchanged, without any negative impact on the system resilience or transaction latency.
 
-\section{The {\secit Bitcoin} ledger}
+\section{The {\secit Bitcoin} Ledger}
 
 Bitcoin was created in 2009 with the objective of providing a system that allows two entities to exchange goods in a secure and anonymous way, without having to trust each other or any single third entity. This is achieved with a cryptographic coin, that can be exchanged between the parties involved in a transaction. Transactions are grouped in blocks and registered in a distributed ledger. Furthermore, the ledger keeps track of all the coins that have been spent, which forbids users from trying to spend the same coin twice (an attack known as \textit{double spending}). The \textit{Bitcoin} ledger is built by linking each block to its predecessor, hence, forming an infinite chain of blocks named \textit{blockchain}.
 
@@ -222,47 +220,71 @@ The introduction of \textsl{CmpctBlock} messages helped in reducing some amount 
 In this section, we propose a set of changes to the dissemination algorithm of transactions with the objective of making it more efficient, namely by lowering the number of redundant advertisements that each node receives. Our proposal is based on the following observations:
 
 \begin{itemize}
-  \item Currently, each node receives on average $6.6$ duplicate advertisements for each transaction (when would be enough to receive a single one to ensure the receipt of a transaction).
+  \item Currently, each node receives on average $6.6$ duplicate advertisements for each transaction (when would be enough to receive a single one to ensure the reception of a transaction).
   \item The network currently possesses two methods to disseminate transactions: exchange of advertisements (used when a transaction is not in a block) exchange of block (used when a transaction is already added to a block).
   \item For historical reasons, the second mechanism is more efficient than the first one, since all the missing transactions that a node might request are sent in a single message (meanwhile through the advertisement method a node has to send a message for each individual transaction).
-  \item In Bitcoin, the requirements for broadcasting transactions are weak because the rate of generation of the blocks is much slower than the processes of dissemination of transactions (on average a block is generated once every 10 minutes)
+  \item In Bitcoin, the requirements for broadcasting transactions are weak because the rate of generation of the blocks is much slower than the processes of dissemination of transactions (on average a block is generated once every 10 minutes).
   \item Miners are only a small fraction of the total number of nodes in the network. However, although it is essential that transactions reach miners, the protocol does not distinguish miners from the rest of the nodes.
-  \item In the current protocol, nodes send their advertisements to all their neighbours (125 in the worst case). This value is substantially higher than the theoretical value for epidemic broadcasting algorithms, which suggests that even in the presence of failures its enough to send information for a number of neighbours proportional to the size of the network which is approximately around 10 000 nodes hence it would be enough to send to $ ln(10~000) \approx 10$ neighbours.
+  \item In the current protocol, nodes send their advertisements to all  neighbours (125 in the worst case). This value is substantially higher than the theoretical value for epidemic broadcasting algorithms, which suggests that even in the presence of failures, it is enough to send information to a logarithmic number of neighbours with respect to the size of the network~\cite{epidemicDiss}. With the current size of $\approx 10~000$ nodes  it would be enough to send to $ ln(10~000) \approx 10$ neighbours.
 \end{itemize}
 
-Our main objective is to lower the amount of duplicated advertisements in the network while ensuring that the transactions reach the miners. The intuition for the proposed approach is to skew the process of dissemination towards the most productive miners. However, to not put  the resilience of the system at stake, we also broadcast transactions to the rest of the system through alternative paths. Our approach consists of three changes to the protocol. The first modification consists in saving for each block that we receive from a neighbour the time that neighbour took to disseminate the block to us. The second one is maintaining a list, for each neighbour, with the transactions we sent to him and how much time it took for those transactions to be added to a block. Finally, the third change is to locally determine which path is better for sending our transactions so that they reach the miners faster and give priority to these paths in the dissemination process. Note that once a transaction is added to a block the epidemic dissemination process becomes irrelevant.
+Our main objective is to lower the amount of duplicated advertisements in the network while ensuring that the transactions reach the miners. The intuition for the proposed approach is to skew the process of dissemination towards the most productive miners. However, this could put the resilience of the system at stake. To prevent this, we also broadcast transactions to the rest of the system through alternative paths. 
 
-\subsection{Ranking neighbours}
-As mentioned previously, the strategy proposed to lower the bandwidth used, has the requirement that each node discovers the fastest path to reach a miner. 
-To achieve this, a node classifies its neighbours, and attributes to each one a ranking with descending order of classification (best nodes at the top). The neighbour classification is given by:
+Our approach encompasses three changes to the protocol. 
+First, nodes  maintain, for each neighbour, a list of the transactions sent by that neighbour and how long it took for these transactions to be included in a block.
+Second, we also maintain for each neighbour the time, it took to send a block to the node.
+Finally, nodes use these metrics to rank their neighbours and prioritise the dissemination of transaction accordingly.
+%determine the fastest path to miners, and prioritise these paths when disseminating transactions.
+Next, we discuss the ranking process.
+
+%Our approach encompasses three changes to the protocol. The first consists in saving for each block that we receive from a neighbour the time that neighbour took to disseminate the block to us. 
+
+%The second one is maintaining a list, for each neighbour, with the transactions we sent to him and how much time it took for those transactions to be added to a block. 
+
+%Finally, the third change is to locally determine which path is better for sending our transactions so that they reach the miners faster and give priority to these paths in the dissemination process. Note that once a transaction is added to a block the epidemic dissemination process becomes irrelevant.
+
+\subsection{Ranking Neighbours}
+To lower bandwidth usage, nodes prioritise neighbours that are closer to miners, or are miners themselves.
+This is done in a decentralised fashion but results in fast paths to miners emerging over other paths.
+Locally, each node, classifies neighbours as follows:
+%As mentioned previously, the strategy proposed to lower the bandwidth used, has the requirement that each node discovers the fastest path to reach a miner. 
+%This is achieved by  classifying neighbours that are closer to minres or that are miners themselves classification system we discuss next. the following classification system, which we discc achieve this, a node classifies its neighbours, and attributes to each one a ranking with descending order of classification (best nodes at the top). The neighbour classification is given by:
 \begin{displaymath} \mbox{class}^{T}= (\dfrac{k^{T}}{n^{T}} + a^{T} - n^{T} + \dfrac{y^{T}}{z^{T}}) \end{displaymath}
 %s discussed next, and sorts them by this classification.
 %The node will so attribute the best classification to the miners who he as a faster path to. After this, 
 %The node will order the neighbours by classification with the neighbours with the best classification being on top of the ordered list and the ones with worst being at the bottom.
-We are now going to explain each component of the classification:
+%We are now going to explain each component of the classification:
 %obtain this classification of the neighbours each node will have to maintain for each neighbour five variables:
+where:
 \begin{itemize}
-  \item \textit{k} accumulated time it took to a neighbour to disseminate each block to us;
-  \item \textit{n} total number of blocks received by a neighbour;
-  \item \textit{a} total number of blocks received;
-  \item \textit{y} accumulated time it took for transactions, sent to a neighbour, to be accepted in a block;
-  \item \textit{z} total number of transactions sent to a neighbour.
+  \item \textit{k} it the accumulated time it took to a neighbour to disseminate each block to the node;
+  \item \textit{n} is the total number of blocks received by a neighbour;
+  \item \textit{a} is the total number of blocks received;
+  \item \textit{y} is the accumulated time it took for transactions, sent to a neighbour, to be accepted in a block;
+  \item \textit{z} is the total number of transactions sent to a neighbour.
 \end{itemize}
 
-The time it takes for a neighbour to relay a block to a node is given by the difference between the current time and the last time the node received a new block from that neighbour. If a neighbour takes more than four hours to relay a block to a node the difference will be the current time minus four hours. Given the large number of transactions that flow through the network, instead of maintaining timers for all of them we only maintain a timer each one hundred transactions. This way we do not overburden nodes with metadata. 
+The time it takes for a neighbour to relay a block to a node is given by the difference between the current time and the last time the node received a new block from that neighbour. 
+%If a neighbour takes more than four hours to relay a block to a node, the difference will be the current time minus four hours. 
+This is to allow the classification to automatically adapt to situations where nodes that generate a block sparingly do not get a good classification indefinitely.
+In fact, even though the majority of blocks is generated by a small subset of miners, sometimes a random node is able to mine a new block successfully.
 
-With this classification we allow our algorithm to adapt by preventing nodes that only generate a block once in a while from having a good classification eternally.
+Given the large number of transactions that flow through the network, instead of maintaining timers for all of them, we only maintain a timer every one hundred transactions. This prevents overloading nodes with metadata while still giving a good sample of the general network behaviour. 
+%With 
 
-This is important because as we have said, there is still a percentage of blocks being mined by random nodes, and if we would, for instance, send all our transactions to those nodes they would take a lot of time to appear in a block. Which is not desired, given that the average time it takes for a transaction to be accepted in Bitcoin nowadays is ten minutes.
 
-This way for a neighbour to have good classification it has to have a good ratio of \textsl{time it takes to disseminate blocks/number of blocks we received from him}, a good ratio of \textsl{blocks received from him/blocks received} and finally a good ratio of \textsl{time it took for a transaction to be added to blocks if we sent it to him}.
+%our algorithm to adapt by preventing nodes that only generate a block once in a while from having a good classification eternally.
+
+%This is important because as we have said, there is still a percentage of blocks being mined by random nodes, and if we would, for instance, send all our transactions to those nodes they would take a lot of time to appear in a block. Which is not desired, given that the average time it takes for a transaction to be accepted in Bitcoin nowadays is ten minutes.
+
+With his in mind, a neighbour has a good classification if it has a good ratio of \textsl{time it takes to disseminate blocks/number of blocks we received from him}, a good ratio of \textsl{blocks received from him/blocks received} and finally a good ratio of \textsl{time it took for a transaction to be added to blocks if we sent it to him}.
 
 Given that the classification of neighbours is prone to change over time, the actual value used to order neighbours is given by the following sliding average of the classification presented previously:
 \begin{displaymath} \mbox{class}^t = (1-\alpha) \cdot \mbox{class}^{t-1} + \alpha \cdot \mbox{class}^{T} \end{displaymath}
 
-The $\alpha$ factor exists to avoid nodes that once generated a lot of blocks but currently do not from having a good classification forever. In our experiments, we used an $\alpha=0.3$ and a \textit{T} configured to be an interval of four hours.
+The $\alpha$ factor exists to avoid nodes that generated a lot of blocks in the past but no longer do, from having a good classification forever. In our experiments, we used an $\alpha=0.3$ and a \textit{T} configured to be an interval of four hours.
 
-Each time a node receives a block from a neighbour the classification of the neighbours will be updated using Algorithm~\ref{alg:class}
+Each time a node receives a block from a neighbour the classification of the neighbours will be updated using Algorithm~\ref{alg:class}.
 
 \begin{algorithm}[t]
 \begin{algorithmic}[1]
@@ -282,11 +304,17 @@ Each time a node receives a block from a neighbour the classification of the nei
 \caption{Top neighbours computation}
 \label{alg:class}
 \end{algorithm}
-\subsection{Skewed relay}
+\subsection{Skewed Relay}
 \label{sec:sr}
-Given that our objective is that our transactions reach a miner as fast as possible we can use the mechanism described previously to do it. Hence, if all the nodes were to follow the protocol correctly, and the paths created by out solution were resilient enough we could send our transactions to only one node, and they would eventually appear in a block.
+%Given that our objective is that transactions reach a miner as fast as possible, we can use the mechanism described previously to do it.
 
-However, even if we do not consider the problem of nodes disconnecting from the network, there is the problem of commit time. So to solve this problem, we will send our transactions not only to the \textit{t} top nodes but also to \textit{r} random nodes, as it is described in Algorithm~\ref{alg:diss}. This way we ensure that our transactions are still broadcast through the rest of the network and will be committed in a timely manner.
+If all nodes followed the protocol, it would suffice to use the mechanism described above to send 
+%Hence, if all the nodes were to follow the protocol correctly, and the paths created by out solution were resilient enough we could send our 
+transactions to only one node, as they would eventually appear in a block.
+
+However, even if we do not consider the problem of node failure and Byzantine behaviour, there is the problem of commit time. 
+Briefly, the variance of the mining process could result in a prolific miner not being able to successfully mine a block for an extended period of time, precluding transactions sent exclusively to it from being included in the blockchain.
+We address this - and simultaneously node failures and Byzantine behavior - by sending transactions not only to the \textit{t} top nodes but also to \textit{r} random nodes, as described in Algorithm~\ref{alg:diss}. This way we ensure that our transactions are still broadcast through the rest of the network and will be committed in a timely manner.
 
 \begin{algorithm}[t]
 \begin{algorithmic}[1]
@@ -310,13 +338,18 @@ However, even if we do not consider the problem of nodes disconnecting from the 
 \label{alg:diss}
 \end{algorithm}
 
-The value of Initial Push (ip) indicates that if a transaction is generated by a node, the node has the option of either sending it for only \textit{t} plus \textit{r} or to all his neighbours.
+The variable \texttt{ip} (Initial Push) indicates that if a transaction is generated by a node, the node has the option of either sending it for only \textit{t} plus \textit{r} or to all his neighbours. 
 
-Hence we can then configure the following variables \textsl{max\_top\_nodes}, \textsl{max\_random\_nodes} and \textsl{ip} to obtain different results in the information dissemination. In Section~\ref{sec:evaluation} we will discuss different configurations tested.
 
-\subsection{Complying with network changes}
+The dissemination process can then be configured with the following variables: \textsl{max\_top\_nodes}, \textsl{max\_random\_nodes} and \textsl{ip} to obtain different results in the information dissemination. 
+We study the impact of these parameters in Section~\ref{sec:evaluation}.
+
+
+%In Section~\ref{sec:evaluation} we will discuss different configurations tested.
+
+\subsection{Adapting to Network Changes}
 \label{sec:nc}
-A key aspect of peer-to-peer networks as stated previously is that nodes can leave or join the network at any given time. With this in mind, we designed an algorithm that adapts to the network in order to maintain the commit time of the transactions while still trying to send as few messages as possible. Our algorithm increases or decreases the values of \textsl{max\_t\_nodes} and \textsl{max\_r\_nodes} by one depending if either, our transactions are taking too long to be committed or if they are being committed in a reasonable time as depicted in Algorithm~\ref{alg:inc}.
+A key aspect of peer-to-peer networks is that nodes can leave or join the network at any  time. With this in mind, we designed an algorithm that adapts to the network in order to maintain the commit time of the transactions while still trying to send as few messages as possible. As  depicted in Algorithm~\ref{alg:inc}, we automatically adjust the values of \textsl{max\_t\_nodes} and \textsl{max\_r\_nodes} depending on whether the node's transactions are taking too long to be committed or are being committed in a  timely fashion.
 
 \begin{algorithm}[t]
 \begin{algorithmic}[1]
@@ -349,40 +382,44 @@ A key aspect of peer-to-peer networks as stated previously is that nodes can lea
 \label{alg:inc}
 \end{algorithm}
 
-As shown in Algorithm~\ref{alg:inc} if the current average, of the time it takes for the unconfirmed transactions of a node to be committed to a block, gets bigger than the constant \textsl{TIME\_TX\_CONFIRM} (30 minutes) then the node is going to increase both the size of \textsl{max\_t\_nodes} and \textsl{max\_r\_nodes}, and relay the transactions that took more than 30 minutes to commit. If for instance, all the current average of the unconfirmed transactions does not surpass the threshold of the 30 minutes then, the node will check if the average time it took to commit its confirmed transactions in the last hour took less than \textsl{TIME\_TX\_CONFIRM} if yes then the node will lower the size of \textsl{max\_t\_nodes} and \textsl{max\_r\_nodes} by one else it will not do anything. Each time \textsl{max\_t\_nodes} and \textsl{max\_r\_nodes} are changed the node will not be able to change these values in the next 2 hours to prevent fluctuations in these values. Furthermore, every time a node increases \textsl{max\_t\_nodes} and \textsl{max\_r\_nodes} it will not be able to decrease these values in the next 4 hours in order to preserve resilience over performance.
+Briefly, if the current average of the time it takes for the unconfirmed transactions of a node to be committed to a block, gets bigger than the constant \textsl{TIME\_TX\_CONFIRM} (30 minutes) then the node is going to increase both the size of \textsl{max\_t\_nodes} and \textsl{max\_r\_nodes}, and relay the transactions that took more than 30 minutes to commit. 
+If the average of all unconfirmed transactions does not surpass the threshold of the 30 minutes, the node will check if the average time it took to commit its confirmed transactions in the last hour took less than \textsl{TIME\_TX\_CONFIRM}. If so the node will lower the size of \textsl{max\_t\_nodes} and \textsl{max\_r\_nodes} by one, otherwise it will not do anything. Each time \textsl{max\_t\_nodes} and \textsl{max\_r\_nodes} are changed the node will not be able to change these values in the next 2 hours to prevent fluctuations in these values. Furthermore, every time a node increases \textsl{max\_t\_nodes} and \textsl{max\_r\_nodes} it will not be able to decrease these values in the next 4 hours in order to prioritise resilience over performance.
 
 \section{Evaluation}
 \label{sec:evaluation}
-To evaluate the proposed approach, we built an event simulator that modules the broadcast of transactions and blocks in the Bitcoin network (this simulator was developed in python). We decided to implement our own simulator because all the simulators that we found were either outdated or were not working~\footnote{Some examples \url{https://github.com/shadow/shadow-plugin-bitcoin} and \url{https://github.com/arthurgervais/Bitcoin-Simulator}}. 
+To evaluate the proposed approach, we built an event driven simulator that models the broadcast of transactions and blocks in the Bitcoin network. We decided to implement our own simulator because all the simulators that we found were either outdated or were not working~\footnote{Some examples \url{https://github.com/shadow/shadow-plugin-bitcoin} and \url{https://github.com/arthurgervais/Bitcoin-Simulator}}. 
 
-\subsection{Simulator tuning}
-In order to tune our simulator so that it simulates the original protocol faithfully, we extended the \textsl{Bitcoin Core} client, the most used Bitcoin client to log metrics about the messages exchanged between clients. The metrics logged were the following: i) transactions advertisements; ii) received transactions; iii) transactions present in compact blocks that the node had to request to be able to rebuild the block. We deployed two instances of this client in two distinct physical locations for a whole month and used the metrics logged by these two clients to tune our simulator. Furthermore, we also used information publicly available on the website \url{https://blockchain.info/} to determine the number of transaction generated, the distribution of blocks generated by miners and the average transaction size. With all these metrics we implemented the original protocol, and then we added our changes to the protocol. We experimentally tuned our simulator so that the results observed were the same as the ones in the real client. The network model that we used in the experiments of Section~\ref{sec:sri} were composed solely of nodes that followed the protocol accordingly.
+\subsection{Simulator Tuning}
+To configure our simulator such that it reproduces faithfully the original protocol, we extended the \textsl{Bitcoin Core} client, the most used Bitcoin client to log metrics about the messages exchanged between clients. The metrics logged were the following: i) transactions advertisements; ii) received transactions; iii) transactions present in compact blocks that the node had to request to be able to rebuild the block. We deployed two instances of this client in two distinct physical locations for a whole month and used the metrics logged by these two clients to tune our simulator. Furthermore, we also used information publicly available on the website \url{https://blockchain.info/} to determine the number of transaction generated, the distribution of blocks generated by miners and the average transaction size. With all these metrics we implemented the original protocol, and then we added our changes to the protocol. We experimentally tuned our simulator so that the results observed were the same as the ones in the real client. The network model that we used in the experiments of Section~\ref{sec:sri} were composed solely of nodes that followed the protocol accordingly.
 
-Running simulations of big Bitcoin networks in a language not optimised for efficiency resulted in the simulations being very demanding in terms of computations and space required which resulted in the simulations taking a long time (scale of days) to complete. Because of this, we tried to see if lowering the size of the network was going to impact the results. To do this we ran the original protocol with 6000 nodes and with 625 nodes and compared the metrics discussed further. The results we obtained were equivalent for both network sizes hence, for the rest of this section we consider a network size of 625 nodes. This proportional scaling between 6000 nodes (size registered when we started experimenting) and 625 nodes, allowed us to explore quickly different possible solutions and run multiple instances of each test. The results presented are an average of 3 independent runs that correspond to 34h in the real world but we discarded the first and last 5 hours of each run in order to study the system in stable state.
+Due to the complexity of the protocol, simulating the full network resulted in resource intensive simulations that lasted for days.
+%Running simulations of big Bitcoin networks in a language not optimised for efficiency resulted in the simulations being very demanding in terms of computations and space required which resulted in the simulations taking a long time (scale of days) to complete. 
+To overcome this, we scaled down the size of the simulated network a follows. 
+First,  we ran the original protocol with 6000 nodes and with 625 nodes and compared the metrics discussed beloq. The results we obtained were equivalent for both network sizes hence, for the rest of this section we consider a network size of 625 nodes. This proportional scaling between 6000 nodes (size registered when we started experimenting) and 625 nodes, allowed us to quickly explore different possible solutions and run multiple instances of each test. The results presented are an average of 3 independent runs that correspond to 34 hours in real time. We discarded the first and last 5 hours of each run in order to study the system in a stable state.
 
 
-\subsection{Skewed relay impact}
+\subsection{Skewed Relay Impact}
 \label{sec:sri}
-We started exploring the different possible solutions that would help us lower the resources used without having a negative impact on the system. To make it easier differentiate between the different experiences we will be using the following notation: \textsl{Tn} where n specifies the value of the variable \textsl{max\_t\_nodes}; and \textsl{Rn} specifies the value of the variable \textsl{max\_r\_nodes} present in the previous algorithms. Note that for these experiments we did not used Algorithm~\ref{alg:inc} because we wanted to determine the best values for the aforementioned variables.
+We started by exploring the different possible solutions to reduce network usage without having a negative impact on the system. In all experiments below, we use the following notation: \textsl{Tn} where n specifies the value of the variable \textsl{max\_t\_nodes}; and \textsl{Rn} specifies the value of the variable \textsl{max\_r\_nodes} present in the previous algorithms. Note that for these experiments we did not used Algorithm~\ref{alg:inc} because we wanted to determine the best values for the aforementioned variables.
 
 Initially we tested with multiple combinations of $n={1,2,3,4}$ for both \textsl{T} and \textsl{R}. After these preliminary experiments, we observed that for values of $n={3,4}$ the results were practically the same as the results without our approach. However, with $n={1,2}$ we observed a considerable reduction in the number of duplicated advertisements.
 These results also support our logs in the real client, where the average number of duplicates was $6.6$. With this in mind, for the rest of the experiments, we considered only the combinations of: T2\_R2; T2\_R1; T2\_R0; T1\_R1; T1\_R0. Additionally, for each configuration, we also experimented with both values of the variable \textsl{ip}.
 
-\begin{figure}
+\begin{figure}[t]
 \centering
 \includegraphics[width=0.5\textwidth]{plots/blocks-gen.pdf}
 \caption{Blocks generated.}
 \label{fig:nb-blocks}
 \end{figure}
 
-\begin{figure}
+\begin{figure}[t]
 \centering
 \includegraphics[width=0.5\textwidth]{plots/tx-added.pdf}
 \caption{Percentage of transactions committed.}
 \label{fig:tx-added}
 \end{figure}
 
-The Figure~\ref{fig:nb-blocks} shows for each configuration the amount of blocks that were generated during each experiment, meanwhile Figure~\ref{fig:tx-added} shows the percentage of transactions added to blocks. Given that we were trying to simulate a Bitcoin network, the simulator generated the expected amount of blocks for a day ($\approx 144$) and committed all the transactions created ($\approx 100\%$). This shows that for every configuration the transactions were reaching a miner and were eventually committed.
+Figure~\ref{fig:nb-blocks} shows, for each configuration, the amount of blocks that were generated during each experiment, while Figure~\ref{fig:tx-added} shows the percentage of transactions added to blocks. As it is possible to observe, the simulation generated the expected amount of blocks for a day ($\approx 144$) and committed all the created transactions ($\approx 100\%$). This shows that, for every configuration, all transactions reached at least a miner that added them to a block.
 
 \begin{figure}[t]
 \centering
@@ -391,7 +428,11 @@ The Figure~\ref{fig:nb-blocks} shows for each configuration the amount of blocks
 \label{fig:commit-time}
 \end{figure}
 
-In Figure~\ref{fig:commit-time} we measured the average time that each configuration takes for committing a transaction. The horizontal lines represent the highest average time and lowest average time it took for a transaction to be committed in Bitcoin. In this image, we can clearly see that both configurations \textsl{T2-R0} and \textsl{T1-R0} are not good enough to achieve a commit time inside the spectrum desired. This also shows that sending transactions for at least one random node alongside our top nodes has a great impact in the commit time as previously stated in Section~\ref{sec:sr}
+We also measured the average transaction commit time for each configuration, depicted in Figure~\ref{fig:commit-time}.   
+%takes for committing a transaction. 
+The horizontal lines represent the highest and lowest average time it took for a transaction to be committed in Bitcoin. We can clearly see that both configurations \textsl{T2-R0} and \textsl{T1-R0} are not good enough to achieve a commit time comparable to Bitcoin.
+%inside the desired spectrum . 
+This shows that sending transactions for at least one random node alongside the top nodes has a great impact in the commit time as previously discussed in Section~\ref{sec:sr}.
 
 \begin{figure}[t]
 \centering
@@ -400,9 +441,12 @@ In Figure~\ref{fig:commit-time} we measured the average time that each configura
 \label{fig:cdf-commit}
 \end{figure}
 
-Figure~\ref{fig:cdf-commit} shows the cumulative distributed function of the time took to commit all the transactions, hence, is a different perspective of Figure~\ref{fig:commit-time}. We can also observe in this two images that after creating a transaction sending it to all our neighbours (\emph{ip=T}) has a very low impact in the time it takes to commit a transaction. This probably happens because the time, it takes for a transaction to reach all the miners, is lower than the rate at which blocks are being generated.
+Figure~\ref{fig:cdf-commit} shows the cumulative distributed function of the time took to commit all the transactions, hence, it is a different perspective of Figure~\ref{fig:commit-time}. We can  observe sending a new transaction it to all the neighbours (\emph{ip=T}) has a very low impact in the time it takes to commit a transaction. 
+We attribute this to the fact that the time it takes for a transaction to reach all the miners is orders of magnitude (few seconds versus dozen of minutes) lower than the rate at which blocks are being generated.
 
-Having analysed the impact of our approach in terms of observable effects in the network like how much time it takes for a transaction to be added to a block and amount of transactions committed we will now focus on the savings in terms of messages sent and in the amount of information transmitted.
+With the impact of each configuration in the transaction commit time and number of transactions analysed, we now focus on the impact on reducing network usage.
+
+%Having analysed the impact of our approach in terms of observable effects in the network like how much time it takes for a transaction to be added to a block and amount of transactions committed we will now focus on the savings in terms of messages sent and in the amount of information transmitted.
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.5\textwidth]{plots/msg-sent.pdf}
@@ -417,12 +461,18 @@ Having analysed the impact of our approach in terms of observable effects in the
 \label{fig:mb-sent}
 \end{figure}
 
-In Figure~\ref{fig:msg-sent} we can see the total number of messages sent in percentage to the amount that it was sent on the Bitcoin network. As expected the configurations with a higher amount of savings were the configurations that did not relay to random nodes. This happens because when we send a transaction to a random node there is a higher chance that that node still does not have that transaction and will request it. Unfortunately, as we have seen previously both these configurations are not viable because both take to much time to commit transactions. Figure~\ref{fig:mb-sent} shows the percentage of the total amount of information, as expected, it follows a similar pattern to Figure~\ref{fig:msg-sent}. We can also see that the savings from Figure~\ref{fig:mb-sent} are not as big as the ones from Figure~\ref{fig:msg-sent} this happens because the advertise messages that we avoid sending are not very big in size. However, processing those messages in the real worlds always takes a toll on the nodes.
+Figure~\ref{fig:msg-sent} shows ratio between the total number of messages sent in to the same amount in the Bitcoin network. As expected, the configurations with a higher amount of savings were the configurations that did not relay to random nodes. This happens because when we send a transaction to a random node there is a higher chance that that node still does not have that transaction and will request it. Unfortunately, as we have seen previously, both these configurations are not viable because both take very long to commit transactions. Figure~\ref{fig:mb-sent} shows a different perspective by depicting the savings in the total amount of information transmitted which,a s expected, follows a similar pattern to Figure~\ref{fig:msg-sent}. We can also see that the savings from Figure~\ref{fig:mb-sent} are not as big as the ones from Figure~\ref{fig:msg-sent}.
+This happens because the advertise messages that we avoid sending are not very big in size. However, processing those spurious incurs an additional cost to the nodes.
+%messages in the real worlds always takes a toll on the nodes.
 
-By analysing these results we can conclude that the most promising configuration is \textsl{T1-R1} with \textsl{ip=False} because not only can we achieve relevant savings (reduction in the number of messages sent in $41.5\%$ and reduction of the amount of information sent in $10.2\%$) but also it preserves the properties of the original Bitcoin.
+By analysing these results, we can conclude that the most promising configuration is \textsl{T1-R1} with \textsl{ip=False} because not only  it achieves relevant savings (reduction in the number of messages sent in $41.5\%$ and reduction of the amount of information sent in $10.2\%$) but also it preserves the properties of the original Bitcoin.
 
-\subsection{Skewed relay impact}
-To determine the best possible configuration we used a stable network, where miners were always the same nodes. However, as we have stated previously Bitcoin is prone to network change, given that is a peer-to-peer network. So for the following results, we used Algorithm~\ref{alg:inc} referenced in Section~\ref{sec:nc}, as well as, all nodes start the simulation by sending advertisements to all their neighbours. Then throughout the simulation, the algorithm increase relay will determine the best Tn-Rn configuration for each node. We performed three experiments, one where we did not make any changes to the network, another where we change two miners in the network at 12 hours into the simulation and finally a third one where we changed all the miners at 12 hours into the simulation. With these experiments, we want to determine if our solution is able to adapt to the network preserving the commit time of the transactions while still trying to send as few messages as possible.
+\subsection{Effect of Adaptation}
+To determine the best possible configuration we used a stable network, where miners were always the same nodes. However, as in any large network, Bitcoin is prone to changes.
+%, given that is a peer-to-peer network. 
+We now study the adaption policy introduced in Algorithm~\ref{alg:inc}.
+%referenced in Section~\ref{sec:nc}, as well as,
+Initially, all nodes send advertisements to all their neighbours as in the regular Bitcoin. Then throughout the simulation, the algorithm will progressively determine the best Tn-Rn configuration for each node. We performed three experiments, one where we did not make any changes to the network, another where we change two miners in the network at 12 hours into the simulation and finally a third one where we changed all the miners at 12 hours into the simulation. With these experiments, we want to determine if our solution is able to adapt to the network changes and preserve the commit time while still sending as few messages as possible.
 
 \begin{figure}[t]
 \centering
@@ -438,19 +488,31 @@ To determine the best possible configuration we used a stable network, where min
 \label{fig:node-per-conf}
 \end{figure}
 
-Figure~\ref{fig:commit-over-time} shows the average commit time over the period of time simulated, it also shows the two horizontal lines that were in Figure~\ref{fig:commit-time}. Figure~\ref{fig:node-per-conf} displays the percentage of nodes in each configuration at the end of the simulation for the three runs. From both of these images, we can conclude a couple of things. First, we can see that if we are in the presence of a stable network, then our solution is going to start adapting to the network and converge to the configuration that we previously deemed ideal (\textsl{T1-R1}), as seen in Figure~\ref{fig:node-per-conf}. Secondly, we can conclude that if there are slight changes to the network, then the average commit time of our solution is going to deteriorate a little bit, but soon after the algorithm will increase the size of \textsl{T} and \textsl{R} to cope with the changes and the average commit time will once again converge to more regular times. Finally, if our solution is confronted with drastic changes to the network it will not be able to maintain the current commit time, given that at 12 hours into the simulation most nodes were configured to \textsl{T1-R1} which is not resilient enough for these cases. However, eventually, our solution will start converging to the desired time. 
+Figure~\ref{fig:commit-over-time} shows the average commit time over the period of time simulated. It also shows the two horizontal lines that were in Figure~\ref{fig:commit-time}, delimiting the minimum and maximum observed Bitcoin commit time. Figure~\ref{fig:node-per-conf} displays the percentage of nodes in each configuration at the end of the simulation for the three runs. 
+We can drawn several interesting configurations.
+%From both of these images, we can conclude a couple %of things. 
+First, we can see that if we are in the presence of a stable network, then our solution is going to start adapting to the network and converge to the configuration that we previously deemed ideal (\textsl{T1-R1}), as seen in Figure~\ref{fig:node-per-conf}. Secondly, we can conclude that if there are slight changes to the network, then the average commit time of our solution is going to deteriorate a little bit, but soon after the algorithm will increase the size of \textsl{T} and \textsl{R} to cope with the changes and the average commit time will once again converge to more regular times. Finally, if our solution is confronted with drastic changes to the network it will not be able to maintain the current commit time, given that at 12 hours into the simulation most nodes were configured to \textsl{T1-R1} which is not resilient enough for these cases. 
+We note however that such sudden shift in mining power is unlikely to happen.
+Regardless, after some time our approach will start converging to the desirable stable configuration.
+%However, eventually, our solution will start converging to the desired time. 
 %Note that in our experiments we configured the most desirable configuration to be the one where we send as few messages as possible (\textsl{T1-R1}) but if for instance, we wanted to maintain the commit time in very dynamic environments then the most desirable configuration would probably be \textsl{T2-R2} as it would be more resilient against dramatic changes.
 
-\section{Related work}
-In Bitcoin, the dissemination of information is one the most important mechanisms for the network to function properly. Multiple studies have focused on analyzing the protocol of information dissemination and the problems it currently has that may lead to forks in the network ~\cite{decker2013information,croman2016scaling,miller2015discovering}.
-Other works have focused on how to explore vulnerabilities in the current dissemination mechanisms in order to benefit the attacker or put the victim in a disadvantageous situation~\cite{apostolaki2016hijacking, sapirshtein2016optimal, eyal2014majority}. For instance, delay the dissemination of information could put miners at a disadvantage if the miner retaining the information already has a block mined.
+\section{Related Work}
+In Bitcoin, the dissemination of information is one of the most important mechanisms for the network to function properly. Multiple studies have focused on analyzing the protocol of information dissemination and the problems it currently has that may lead to forks in the network ~\cite{decker2013information,croman2016scaling,miller2015discovering}.
+Other works have focused on how to explore vulnerabilities in the current dissemination mechanisms in order to benefit the attacker or put the victim in a disadvantageous situation~\cite{apostolaki2016hijacking, sapirshtein2016optimal, eyal2014majority, heilman2015eclipse, bojja2017dandelion}. For instance, delaying the dissemination of information could put miners at a disadvantage if the miner retaining the information already has a block mined.
 
-However, the dissemination mechanism already has gone through multiple changes since its introduction~\cite{nakamoto2008bitcoin}. Some of these changes can be found in multiple \textsl{Bitcoin Improvement Proposals}~\cite{bip152,bips} however, we were only able to identify some of the changes done to the current client by analyzing the source code thoroughly. 
+The dissemination mechanism already has gone through multiple changes since its introduction~\cite{nakamoto2008bitcoin} in part to mitigate known attacks. Some of these changes can be found in multiple \textsl{Bitcoin Improvement Proposals}~\cite{bip152, bip130, bips} but several significant changes required a detailed analysis of the source code as documentation is scarce of non-existent.
+%, we were only able to identify some of the changes done to the current client by analyzing the source code thoroughly. 
 
 \section{Conclusions}
-In conclusion, despite the multiple iterations and improvements, that have been done to the protocol of dissemination since its introduction, there are still nowadays some aspects that could be improved. Given the current size of the network and the introduction of new clients to the system is of utmost importance that the new systems are efficient without hurting the resilience of the system. In this article, we propose multiple improvements to the current algorithm of dissemination that allow us to save, 10.2\% of the current bandwidth used and 41.5\% of the number of messages exchanged.
+Despite the multiple iterations and improvements  that have been done to the Bitcoin dissemination protocol since its introduction, there are still  some aspects that need to be improved. 
+As Bitcoin becomes more popular and new clients join the system, it is fundamental to have an efficient and robust dissemination substrate for the network to function properly.
+%Given the current size of the network and the introduction of new clients to the system is of utmost importance that the new systems are efficient without hurting the resilience of the system. 
+In this paper, we took some steps in this direction by improving the existing algorithm to do a more selective dissemination.
+Our improvements allow to save, 10.2\% of the current bandwidth used and 41.5\% of the number of messages exchanged without compromising the robustness of the current approach.
 
-As future work, we hope to develop an improvement to membership protocol with the help of information gathered to build more efficient paths.
+As future work, we plan to leverage more detailed membership information to build more efficient dissemination paths.
+%hope to develop an improvement to membership protocol with the help of information gathered to build more efficient paths.
 
 %\end{document}  % This is where a 'short' article might terminate
 
